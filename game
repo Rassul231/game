@@ -1,0 +1,274 @@
+import time
+
+import pygame
+import sys
+import random
+from pygame import mixer
+
+
+pygame.init()
+mixer.init()
+
+width, height = 700, 725
+screen = pygame.display.set_mode((width, height))
+pygame.display.set_caption("Star Wars")
+bullet_sound = mixer.Sound("Sounds/laser_sound.mp3")
+background_sound = mixer.Sound("Sounds/Back_ground_sound.mp3")
+damage_sound = mixer.Sound("Sounds/damage_sound.mp3")
+player_image = pygame.image.load("imgs/Ship.png")
+
+player_image = pygame.transform.scale(player_image, (120, 120))
+
+bullet_image = pygame.image.load("imgs/bullet.png")
+bullet_image = pygame.transform.scale(bullet_image, (91, 71))
+
+enemy_image = pygame.image.load("imgs/Enemy.png")
+enemy_image = pygame.transform.scale(enemy_image, (70, 70))
+
+enemy_image_1 = pygame.image.load("imgs/Enemy1.png")
+enemy_image_1 = pygame.transform.scale(enemy_image, (100, 100))
+
+enemy_counter = 0
+
+background_image = pygame.image.load("imgs/msg-4101467307-38752.jpg")
+background_image = pygame.transform.scale(background_image,(width, height))
+
+
+player_rect = player_image.get_rect()
+player_rect.topleft = (width // 2 - player_rect.width // 2,
+                       height - player_rect.height - 10)
+player_speed = 15
+player_health = 3
+
+bullet_rect = bullet_image.get_rect()
+bullet_speed = 10
+bullets = []
+
+enemy_rect = enemy_image.get_rect()
+enemy_rect1 = enemy_image_1.get_rect()
+enemy_speed = 5
+enemies = []
+
+collision = False
+collision_time = 0
+animation_duration = 500
+blink_duration = 100
+visible = True
+
+last_speed_increase = pygame.time.get_ticks()
+start_time = pygame.time.get_ticks()
+speed_increase_interval = 10000
+
+
+last_shot_time = 0
+shot_delay = 300
+
+
+
+def draw_image_button(screen, normal_image, hover_image, x, y):
+    mouse_pos = pygame.mouse.get_pos()
+    click = pygame.mouse.get_pressed()
+    image_rect = normal_image.get_rect(topleft=(x, y))
+
+    if image_rect.collidepoint(mouse_pos):
+        screen.blit(hover_image, (x, y))
+        if click[0] == 1:
+            return True
+    else:
+        screen.blit(normal_image, (x, y))
+
+    return False
+def game_over_screen(screen):
+    font = pygame.font.Font(None, 74)
+    text = font.render('Game Over!', True, (255, 0, 0))
+    text_rect = text.get_rect(center=(width // 2, height // 2))
+
+    screen.blit(text, text_rect)
+    pygame.display.flip()
+
+    waiting_for_key = True
+    while waiting_for_key:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                show_menu(screen)
+def show_menu(screen):
+    menu_active = True
+
+    button_width = 400
+    button_height = 200
+
+    start_normal = pygame.transform.scale(pygame.image.load('imgs/start_img.png'), (button_width, button_height))
+    start_hover = pygame.transform.scale(pygame.image.load('imgs/start_img.png'), (button_width, button_height))
+    exit_normal = pygame.transform.scale(pygame.image.load('imgs/quit_img.png'), (button_width, button_height))
+    exit_hover = pygame.transform.scale(pygame.image.load("imgs/quit_img.png"), (button_width, button_height))
+
+    curent_number = 1
+
+    while menu_active:
+        screen.fill((0, 0, 0))
+
+        background_sound.play()
+
+        if draw_image_button(screen, start_normal, start_hover, 170, 150):
+            background_sound.stop()
+            if (curent_number == 0):
+                reset_game()
+            else:
+                curent_number=-1
+                return
+
+        if draw_image_button(screen, exit_normal, exit_hover, 170, 450):
+            pygame.quit()
+            sys.exit()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        pygame.display.flip()
+
+
+clock = pygame.time.Clock()
+def draw_health(screen, x, y, health, max_health):
+    cube_width = 30
+    cube_height = 30
+    cube_margin = 5
+    for i in range(max_health):
+        if i < health:
+            cube_color = (255, 0, 0)
+        else:
+            cube_color = (128, 128, 128)
+        pygame.draw.rect(screen, cube_color, (x + i * (cube_width + cube_margin), y, cube_width, cube_height))
+
+def reset_game():
+    global player, health, obstacles, obstacle_speeds, last_collision_time, game_start_time
+    player = pygame.Rect(0, 0, 25, 25)
+    health = 3
+    obstacles = []
+    obstacle_speeds = []
+    for _ in range(16):
+        new_rect = pygame.Rect(random.randint(0, width-100), random.randint(0,height-100), 100, 100)
+        obstacles.append(new_rect)
+        obstacle_speeds.append([random.choice([-1, 1]) * random.uniform(0.5, 1), random.uniform(1, 2)])
+    last_collision_time = 0
+    game_start_time = time.time()
+def animate_collision():
+    global collision, collision_time, visible, blink_duration, animation_duration
+    if collision:
+        current_time = pygame.time.get_ticks()
+        if current_time - collision_time < animation_duration:
+            if (current_time - collision_time) // blink_duration % 2 == 0:
+                visible = True
+            else:
+                visible = False
+        else:
+            collision = False
+            visible = True
+
+
+keys_pressed = {'left': False, 'right': False}
+show_menu(screen)
+run = True
+while run:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT:
+                keys_pressed['left'] = True
+            elif event.key == pygame.K_RIGHT:
+                keys_pressed['right'] = True
+            elif event.key == pygame.K_SPACE:
+                current_time = pygame.time.get_ticks()
+                if current_time - last_shot_time >= shot_delay:
+                    bullet_rect = bullet_image.get_rect()
+                    bullet = {
+                        'rect': pygame.Rect(
+                            player_rect.x + player_rect.width // 2 - bullet_rect.width // 2,
+                            player_rect.y,
+                            bullet_rect.width,
+                            bullet_rect.height
+                        ),
+                        'image': bullet_image
+                    }
+                    bullets.append(bullet)
+                    bullet_sound.play()
+                    last_shot_time = current_time
+
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_LEFT:
+                keys_pressed['left'] = False
+            elif event.key == pygame.K_RIGHT:
+                keys_pressed['right'] = False
+
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_LEFT:
+                keys_pressed['left'] = False
+            elif event.key == pygame.K_RIGHT:
+                keys_pressed['right'] = False
+
+    if keys_pressed['left'] and player_rect.left > 0:
+        player_rect.x -= player_speed
+    if keys_pressed['right'] and player_rect.right < width:
+        player_rect.x += player_speed
+
+        current_time = pygame.time.get_ticks()
+        if current_time - last_speed_increase > speed_increase_interval:
+            enemy_speed *= 1.5
+            last_speed_increase = current_time
+
+    for bullet in bullets:
+        bullet['rect'].y -= bullet_speed
+        if bullet['rect'].bottom < 0:
+            bullets.remove(bullet)
+
+    if random.randint(0, 100) < 10:
+        if random.randint(1,3) == 2:
+            enemy_rect = enemy_image.get_rect()
+            enemy_rect.x = random.randint(0, width - enemy_rect.width)
+            enemies.append(enemy_rect)
+        else:
+            enemy_rect = enemy_image_1.get_rect()
+            enemy_rect.x = random.randint(0, width - enemy_rect.width)
+            enemies.append(enemy_rect)
+
+    for enemy in enemies:
+        enemy.y += enemy_speed
+        if player_rect.colliderect(enemy):
+            player_health -= 1
+            enemies.remove(enemy)
+            damage_sound.play()
+            collision = True
+            collision_time = pygame.time.get_ticks()
+
+    animate_collision()
+
+    for bullet in bullets:
+        for enemy in enemies:
+            if enemy.colliderect(bullet['rect']):
+                bullets.remove(bullet)
+                enemies.remove(enemy)
+                break
+
+    screen.blit(background_image, (0, 0))
+    if visible:
+        screen.blit(player_image, player_rect)
+
+    for bullet in bullets:
+        screen.blit(bullet['image'], bullet['rect'].topleft)
+    for enemy in enemies:
+        screen.blit(enemy_image, enemy)
+
+    if player_health <= 0:
+        game_over_screen(screen)
+
+    draw_health(screen, 50, 30, player_health, 3)
+    pygame.display.flip()
+
+    clock.tick(30)
